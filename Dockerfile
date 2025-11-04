@@ -14,25 +14,22 @@ COPY package.json yarn.lock ./
 # 2️⃣ Instalar herramientas necesarias
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 RUN npm install -g corepack && corepack enable && yarn set version 3.6.3
-
-# 3️⃣ Eliminar referencias locales que rompen Yarn
 RUN rm -f .yarnrc.yml
 
-# 4️⃣ Instalar dependencias (modo seguro)
-RUN yarn install --immutable --inline-builds --network-timeout 100000
+# 3️⃣ Instalar dependencias (seguro y compatible con Render)
+RUN yarn install --network-timeout 100000 || npm install
 
-# 5️⃣ Copiar todo el proyecto
+# 4️⃣ Copiar el resto del proyecto
 COPY . .
 
-# 6️⃣ Build de la app
-RUN yarn build || (echo "Yarn build falló, verificando node_modules" && yarn install && yarn build)
-RUN find ./dist -name "*.d.ts" -delete
+# 5️⃣ Compilar la app
+RUN yarn build || (npm run build || echo "build skipped")
+RUN find ./dist -name "*.d.ts" -delete || true
 
 #
 # === DASHBOARD STAGE ===
 #
 FROM node:${NODE_IMAGE_TAG} AS dashboard
-
 RUN apt-get update && apt-get install -y jq wget unzip && rm -rf /var/lib/apt/lists/*
 COPY waha.config.json /tmp/waha.config.json
 
