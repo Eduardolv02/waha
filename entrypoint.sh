@@ -1,7 +1,28 @@
 #!/bin/sh
 
 
-#
+if [ -z "$WAHA_API_KEY" ]; then
+  export WAHA_API_KEY=$(cat /proc/sys/kernel/random/uuid)
+  echo "🔑 Generada nueva WAHA_API_KEY: $WAHA_API_KEY"
+else
+  echo "✅ Usando WAHA_API_KEY existente"
+fi
+
+
+export WAHA_DASHBOARD_USERNAME=${WAHA_DASHBOARD_USERNAME:-admin}
+export WAHA_DASHBOARD_PASSWORD=${WAHA_DASHBOARD_PASSWORD:-$(cat /proc/sys/kernel/random/uuid)}
+export WHATSAPP_SWAGGER_USERNAME=${WHATSAPP_SWAGGER_USERNAME:-admin}
+export WHATSAPP_SWAGGER_PASSWORD=${WHATSAPP_SWAGGER_PASSWORD:-$WAHA_DASHBOARD_PASSWORD}
+
+
+echo "---------------------------------------------"
+echo " WAHA CONFIGURATION"
+echo " API KEY: $WAHA_API_KEY"
+echo " DASHBOARD USER: $WAHA_DASHBOARD_USERNAME"
+echo " DASHBOARD PASS: $WAHA_DASHBOARD_PASSWORD"
+echo "---------------------------------------------"
+
+
 # Calculate UV_THREADPOOL_SIZE based on number of CPUs
 #
 # Try to get CPU count using Node.js, fallback to 1 if it fails
