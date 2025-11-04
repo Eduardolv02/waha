@@ -216,4 +216,11 @@ ENV WAHA_ZIPPER=ZIPUNZIP
 EXPOSE 3000
 # Use tini as init system to handle zombie processes properly
 ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Disable auth for Render
+ENV WAHA_HTTP_NO_AUTH=true
+ENV WAHA_HTTP_PORT=$PORT
+ENV WAHA_LOG_LEVEL=info
+
+
 CMD ["/entrypoint.sh"]
