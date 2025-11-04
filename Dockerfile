@@ -2,41 +2,38 @@ ARG NODE_IMAGE_TAG=22.16-bookworm-slim
 ARG GOLANG_IMAGE_TAG=1.23-bookworm
 
 #
-# Build
+# === BUILD STAGE ===
 #
 FROM node:${NODE_IMAGE_TAG} AS build
 ENV PUPPETEER_SKIP_DOWNLOAD=True
+WORKDIR /app
 
-WORKDIR /git
-
-# Copiar solo lo necesario para instalar deps
+# 1️⃣ Copiar dependencias
 COPY package.json yarn.lock ./
 
-# Instalar git y Corepack
+# 2️⃣ Instalar herramientas necesarias
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-RUN npm install -g corepack && corepack enable
-RUN yarn set version 3.6.3
+RUN npm install -g corepack && corepack enable && yarn set version 3.6.3
 
-# Ignorar yarn-path local que pueda romper el build
+# 3️⃣ Eliminar referencias locales que rompen Yarn
 RUN rm -f .yarnrc.yml
 
-# Instalar dependencias
-RUN yarn install --immutable --network-timeout 100000
+# 4️⃣ Instalar dependencias (modo seguro)
+RUN yarn install --immutable --inline-builds --network-timeout 100000
 
-# Copiar el resto del código
+# 5️⃣ Copiar todo el proyecto
 COPY . .
 
-# Build de la app
-RUN yarn build && find ./dist -name "*.d.ts" -delete
+# 6️⃣ Build de la app
+RUN yarn build || (echo "Yarn build falló, verificando node_modules" && yarn install && yarn build)
+RUN find ./dist -name "*.d.ts" -delete
 
 #
-# Dashboard
+# === DASHBOARD STAGE ===
 #
 FROM node:${NODE_IMAGE_TAG} AS dashboard
 
-# Herramientas necesarias
 RUN apt-get update && apt-get install -y jq wget unzip && rm -rf /var/lib/apt/lists/*
-
 COPY waha.config.json /tmp/waha.config.json
 
 RUN WAHA_DASHBOARD_GITHUB_REPO=$(jq -r '.waha.dashboard.repo' /tmp/waha.config.json) && \
@@ -48,12 +45,10 @@ RUN WAHA_DASHBOARD_GITHUB_REPO=$(jq -r '.waha.dashboard.repo' /tmp/waha.config.j
     rm -rf ${WAHA_DASHBOARD_SHA}.zip /tmp/dashboard
 
 #
-# GOWS
+# === GOWS STAGE ===
 #
 FROM golang:${GOLANG_IMAGE_TAG} AS gows
-
 RUN apt-get update && apt-get install -y jq protobuf-compiler libvips-dev && rm -rf /var/lib/apt/lists/*
-
 COPY waha.config.json /tmp/waha.config.json
 WORKDIR /go/gows
 
@@ -66,64 +61,42 @@ RUN GOWS_GITHUB_REPO=$(jq -r '.waha.gows.repo' /tmp/waha.config.json) && \
     chmod +x /go/gows/bin/gows
 
 #
-# Final
+# === FINAL STAGE ===
 #
 FROM node:${NODE_IMAGE_TAG} AS release
 ENV PUPPETEER_SKIP_DOWNLOAD=True
 ENV NODE_OPTIONS="--max-old-space-size=16384"
 ARG USE_BROWSER=chromium
 ARG WHATSAPP_DEFAULT_ENGINE
-
 RUN echo "USE_BROWSER=$USE_BROWSER"
 
-# Dependencias básicas
 RUN apt-get update && apt-get install -y ffmpeg libvips zip unzip wget curl libc6 tini && rm -rf /var/lib/apt/lists/*
 
-# Dependencias para navegadores
 RUN if [ "$USE_BROWSER" = "chromium" ] || [ "$USE_BROWSER" = "chrome" ]; then \
     apt-get update && apt-get install -y \
-        fontconfig fonts-freefont-ttf fonts-gfs-neohellenic fonts-indic fonts-ipafont-gothic \
-        fonts-kacst fonts-liberation fonts-noto-cjk fonts-noto-color-emoji fonts-roboto \
-        fonts-thai-tlwg fonts-wqy-zenhei fonts-open-sans xvfb xauth libnss3 libxss1 \
+        fontconfig fonts-noto-color-emoji fonts-liberation xvfb xauth libnss3 libxss1 \
         libasound2 libatk-bridge2.0-0 libgtk-3-0 libdrm2 ca-certificates && rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Chromium
 RUN if [ "$USE_BROWSER" = "chromium" ]; then \
     apt-get update && apt-get install -y chromium && rm -rf /var/lib/apt/lists/*; \
     fi
 
-# Chrome
-ARG CHROME_VERSION="140.0.7339.80-1"
-RUN if [ "$USE_BROWSER" = "chrome" ]; then \
-    wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${CHROME_VERSION}_amd64.deb && \
-    apt install -y /tmp/chrome.deb && rm /tmp/chrome.deb; \
-    fi
-
-# Variables WAHA
-ENV WHATSAPP_DEFAULT_ENGINE=$WHATSAPP_DEFAULT_ENGINE
-ENV WAHA_GOWS_PATH=/app/gows
-ENV WAHA_GOWS_SOCKET=/tmp/gows.sock
-ENV WAHA_ZIPPER=ZIPUNZIP
-ENV CHOKIDAR_USEPOLLING=1
-ENV CHOKIDAR_INTERVAL=5000
-
 WORKDIR /app
-COPY package.json ./ 
-COPY --from=build /git/node_modules ./node_modules
-COPY --from=build /git/dist ./dist
+
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=dashboard /dashboard ./dist/dashboard
 COPY --from=gows /go/gows/bin/gows /app/gows
+COPY package.json ./
 COPY .env.example ./.env.example
 COPY scripts/init-waha.js ./scripts/init-waha.js
+COPY entrypoint.sh /entrypoint.sh
 
 RUN chmod +x ./scripts/init-waha.js && \
     printf '%s\n' '#!/bin/sh' 'exec node /app/scripts/init-waha.js "$@"' > /usr/local/bin/init-waha && \
     chmod +x /usr/local/bin/init-waha
 
-COPY entrypoint.sh /entrypoint.sh
-
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/entrypoint.sh"]
-
