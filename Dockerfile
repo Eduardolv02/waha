@@ -228,5 +228,5 @@ RUN echo '#!/bin/sh' > /render-entrypoint.sh && \
 
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/render-entrypoint.sh"]
+CMD ["node", "dist/main.js"]
 
