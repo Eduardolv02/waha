@@ -212,15 +212,21 @@ ENV CHOKIDAR_INTERVAL=5000
 # WAHA variables
 ENV WAHA_ZIPPER=ZIPUNZIP
 
-# Run command, etc
-EXPOSE 3000
-# Use tini as init system to handle zombie processes properly
-ENTRYPOINT ["/usr/bin/tini", "--"]
-
-# Disable auth for Render
+# For Render - disable auth and set dynamic port
 ENV WAHA_HTTP_NO_AUTH=true
-ENV WAHA_HTTP_PORT=$PORT
+ENV WAHA_HTTP_PORT=${PORT}
 ENV WAHA_LOG_LEVEL=info
 
+# Replace entrypoint to ensure envs load before init
+RUN echo '#!/bin/sh' > /render-entrypoint.sh && \
+    echo 'export WAHA_HTTP_NO_AUTH=true' >> /render-entrypoint.sh && \
+    echo 'export WAHA_HTTP_PORT=${PORT}' >> /render-entrypoint.sh && \
+    echo 'export WAHA_LOG_LEVEL=info' >> /render-entrypoint.sh && \
+    echo 'echo "WAHA_HTTP_NO_AUTH=$WAHA_HTTP_NO_AUTH, WAHA_HTTP_PORT=$WAHA_HTTP_PORT"' >> /render-entrypoint.sh && \
+    echo 'exec /entrypoint.sh "$@"' >> /render-entrypoint.sh && \
+    chmod +x /render-entrypoint.sh
 
-CMD ["/entrypoint.sh"]
+EXPOSE 3000
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/render-entrypoint.sh"]
+
