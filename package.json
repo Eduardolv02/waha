@@ -163,3 +163,7 @@
   },
   "packageManager": "yarn@3.6.3"
 }
+
+"scripts": {
+  "build": "yarn build && node inject-api-key.js"
+}
