@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "prebuild": "rimraf dist",
-    "build": "nest build",
+    "build": "nest build && node inject-api-key.js",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -162,9 +162,4 @@
     "testEnvironment": "node"
   },
   "packageManager": "yarn@3.6.3"
-}
-
-"scripts": {
- "build": "nest build && node inject-api-key.js"
-  
 }
