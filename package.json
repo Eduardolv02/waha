@@ -165,5 +165,6 @@
 }
 
 "scripts": {
-  "build": "yarn build && node inject-api-key.js"
+ "build": "nest build && node inject-api-key.js"
+  
 }
